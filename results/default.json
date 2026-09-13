@@ -1,0 +1,74 @@
+{
+  "engineering": {
+    "ok": true,
+    "version": 1,
+    "receiptSchemaVersion": 1
+  },
+  "config": {
+    "seed": 17,
+    "budget": 120,
+    "instances": 10,
+    "evalScale": "receipt",
+    "searchOnlySample": 0,
+    "maxModes": 12,
+    "fullDefault": {
+      "budgetPerGeneratorPerTask": 4000,
+      "mandelbrotGrid": "96x96",
+      "gcdHeldout": 128,
+      "sort4Heldout": 256,
+      "parityHeldout": 256
+    }
+  },
+  "tasks": {
+    "mandelbrot": {
+      "search": {"evolution":{"bestScore":0.75,"evaluations":120},"anneal":{"bestScore":0.759375,"evaluations":120}},
+      "compression":{"modeCount":3,"nmseModes":0.0039283593524273835,"nmseGlobal":0.013153331990017347,"validationCount":24,"successfulTraceCount":15,"successfulTransitionCount":96,"available":true},
+      "execution":{"compiledScore":0.47585720486111116,"globalScore":0.7046983506944444,"neuralScore":0.3592664930555556,"mandelbrotCorr":0.11879524453324268,"mandelbrotNmae":0.5241427951388888,"globalCorr":0.11585315778011433,"globalNmae":0.2953016493055556,"neuralCorr":0,"neuralNmae":0.6407335069444444,"compiledOperations":1968,"truthEscape":[1,2,3,3,4,6,3,2,2,3,3,4,7,32,5,3,3,3,5,7,32,32,32,3,4,6,32,20,32,32,32,4,4,6,32,20,32,32,32,4,3,3,5,7,32,32,32,3,2,3,3,4,7,32,5,3,1,2,3,3,4,6,3,2],"compiledEscape":[32,6,32,32,32,5,32,7,32,6,32,32,5,5,32,8,32,6,32,32,32,5,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,32,5,32,3,32,32,32,32,32,5,32,32,32,32,32,32,32,5,4,32,32,32,32],"globalEscape":[7,7,7,8,8,8,8,8,7,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,8,9,9,9,8,8,8,9,9,9,9,9,8,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9,9],"gridSide":8,"sampleRoute":[{"modeId":0,"residual":1.0697690354324771,"gate":0.8789343654518298},{"modeId":0,"residual":1.0911006017864395,"gate":0.8655745698446735},{"modeId":1,"residual":0.8273800596643633,"gate":0.9781928337790555},{"modeId":1,"residual":0.5621381789733273,"gate":0.9942271182926266},{"modeId":1,"residual":0.7195093638897793,"gate":0.9872651484499755},{"modeId":1,"residual":1.5156764843088366,"gate":0.5774657611887698},{"modeId":"UNKNOWN","residual":null}],"searchOnlyComplete":false,"searchOnlyScore":null,"searchCandidateEvaluations":138240,"thumbnailOnly":true},
+      "ablation":{"routedScore":0.47585720486111116,"disabledScore":0.7046983506944444,"routedExact":0,"disabledExact":0},
+      "crossSolver":{"shared":true,"fidelityRatio":0.997997203044166,"modeId":0,"counts":{"evolution":16,"anneal":8}},
+      "interpretation":{"modeId":1,"name":"UNNAMED","bestR2":0.9524580864499016,"probeCount":1000,"modes":[{"modeId":0,"name":"UNNAMED","bestR2":0.5075275589708064,"probeCount":1000,"effectiveRank":8},{"modeId":1,"name":"UNNAMED","bestR2":0.9524580864499016,"probeCount":1000,"effectiveRank":8},{"modeId":2,"name":"UNNAMED","bestR2":0.739867573670159,"probeCount":1000,"effectiveRank":8}]},
+      "modes":[{"id":0,"threshold":1.422181622492804,"trainSolvers":["anneal","evolution"],"count":19},{"id":1,"threshold":1.5772644560410256,"trainSolvers":["anneal"],"count":18},{"id":2,"threshold":1.5742846439351492,"trainSolvers":["anneal","evolution"],"count":35}],
+      "parameterCount":{"modes":267,"neural":144}
+    },
+    "gcd": {
+      "search":{"evolution":{"bestScore":0.37666666666666665,"evaluations":120},"anneal":{"bestScore":0,"evaluations":120}},
+      "compression":{"modeCount":2,"nmseModes":0.001454225078514434,"nmseGlobal":0.0008581250667256341,"validationCount":18,"successfulTraceCount":3,"successfulTransitionCount":72,"available":true},
+      "execution":{"compiledScore":0.020833333333333332,"globalScore":0.020833333333333332,"neuralScore":0.09641414141414141,"compiledExact":0.020833333333333332,"globalExact":0.020833333333333332,"neuralExact":0,"compiledOperations":28,"sampleRoute":[{"modeId":"UNKNOWN","residual":null}],"searchOnlyComplete":false,"searchOnlyScore":null,"searchCandidateEvaluations":11520},
+      "ablation":{"routedScore":0.020833333333333332,"disabledScore":0.020833333333333332,"routedExact":0.020833333333333332,"disabledExact":0.020833333333333332},
+      "crossSolver":{"shared":false,"fidelityRatio":0,"modeId":null,"counts":{}},
+      "interpretation":{"modeId":0,"name":"IDENTITY","bestR2":0.9924623440975113,"probeCount":1000,"modes":[{"modeId":0,"name":"IDENTITY","bestR2":0.9924623440975113,"probeCount":1000,"effectiveRank":8},{"modeId":1,"name":"UNNAMED","bestR2":0.9422759013840838,"probeCount":1000,"effectiveRank":8}]},
+      "modes":[{"id":0,"threshold":1.3234263391161558,"trainSolvers":["evolution"],"count":28},{"id":1,"threshold":1.402368650575364,"trainSolvers":["evolution"],"count":26}],
+      "parameterCount":{"modes":178,"neural":93}
+    },
+    "sort4": {
+      "search":{"evolution":{"bestScore":0.5749163493459928,"evaluations":120},"anneal":{"bestScore":0.2767766468660081,"evaluations":120}},
+      "compression":{"modeCount":2,"nmseModes":2.422392559043209e-7,"nmseGlobal":2.209186604189627e-7,"validationCount":9,"successfulTraceCount":3,"successfulTransitionCount":36,"available":true},
+      "execution":{"compiledScore":0.3669629376455336,"globalScore":0.4075976801980776,"neuralScore":0.5144173265299801,"compiledExact":0,"globalExact":0,"neuralExact":0,"compiledOperations":0,"sampleRoute":[{"modeId":"UNKNOWN","residual":null}],"searchOnlyComplete":false,"searchOnlyScore":null,"searchCandidateEvaluations":15360},
+      "ablation":{"routedScore":0.3669629376455336,"disabledScore":0.4075976801980776,"routedExact":0,"disabledExact":0},
+      "crossSolver":{"shared":false,"fidelityRatio":0,"modeId":null,"counts":{}},
+      "interpretation":{"modeId":0,"name":"IDENTITY","bestR2":0.9879449247696712,"probeCount":1000,"modes":[{"modeId":0,"name":"IDENTITY","bestR2":0.9879449247696712,"probeCount":1000,"effectiveRank":10},{"modeId":1,"name":"IDENTITY","bestR2":0.9817289563036381,"probeCount":1000,"effectiveRank":10}]},
+      "modes":[{"id":0,"threshold":1.314378668044395,"trainSolvers":["evolution"],"count":20},{"id":1,"threshold":0.8008074559029555,"trainSolvers":["evolution"],"count":7}],
+      "parameterCount":{"modes":262,"neural":136}
+    },
+    "parity": {
+      "search":{"evolution":{"bestScore":0.7367310847259825,"evaluations":120},"anneal":{"bestScore":0.6215475713989764,"evaluations":120}},
+      "compression":{"modeCount":1,"nmseModes":0.44268011649735023,"nmseGlobal":0.44268011649735023,"validationCount":27,"successfulTraceCount":13,"successfulTransitionCount":111,"available":true},
+      "execution":{"compiledScore":0.557194497516939,"globalScore":0.572998310122644,"neuralScore":0.4649590592207689,"compiledExact":0.46875,"globalExact":0.5,"neuralExact":0.453125,"compiledOperations":473,"sampleRoute":[{"modeId":0,"residual":0.8832105042092708,"gate":0.9382229723196183},{"modeId":0,"residual":0.6748846856440474,"gate":0.9813989269761756},{"modeId":0,"residual":0.5145432401696058,"gate":0.9927841162086489},{"modeId":0,"residual":0.55042576934662,"gate":0.9910732363405783},{"modeId":0,"residual":0.5398673613299686,"gate":0.9916146565878922},{"modeId":0,"residual":0.611139868038191,"gate":0.9872174006986174},{"modeId":0,"residual":0.6630596314025822,"gate":0.9826463439220896},{"modeId":0,"residual":0.9024948346236222,"gate":0.9311942526878536}],"searchOnlyComplete":false,"searchOnlyScore":null,"searchCandidateEvaluations":15360},
+      "ablation":{"routedScore":0.557194497516939,"disabledScore":0.572998310122644,"routedExact":0.46875,"disabledExact":0.5},
+      "crossSolver":{"shared":true,"fidelityRatio":0.9995177760149682,"modeId":0,"counts":{"evolution":62,"anneal":49}},
+      "interpretation":{"modeId":0,"name":"UNNAMED","bestR2":0.5951229190058478,"probeCount":1000,"modes":[{"modeId":0,"name":"UNNAMED","bestR2":0.5951229190058478,"probeCount":1000,"effectiveRank":7}]},
+      "modes":[{"id":0,"threshold":1.338313329486702,"trainSolvers":["anneal","evolution"],"count":84}],
+      "parameterCount":{"modes":89,"neural":59}
+    }
+  },
+  "baselines":{"mandelbrot":{"globalScore":0.7046983506944444,"neuralScore":0.3592664930555556},"gcd":{"globalScore":0.020833333333333332,"neuralScore":0.09641414141414141},"sort4":{"globalScore":0.4075976801980776,"neuralScore":0.5144173265299801},"parity":{"globalScore":0.572998310122644,"neuralScore":0.4649590592207689}},
+  "controls":{"mandelbrotImitation":{"evidenceType":"teacher-forced control","label":"KNOWN-LAW CONTROL — not algorithm discovery","correlation":1,"normalizedMae":0,"gridSide":8,"escape":[1,2,3,3,4,6,3,2,2,3,3,4,7,32,5,3,3,3,5,7,32,32,32,3,4,6,32,20,32,32,32,4,4,6,32,20,32,32,32,4,3,3,5,7,32,32,32,3,2,3,3,4,7,32,5,3,1,2,3,3,4,6,3,2],"thumbnailOnly":true}},
+  "gates": {
+    "gate0":{"pass":false,"evidence":{"passTasks":["mandelbrot"],"count":1}},
+    "gate1":{"pass":false,"evidence":{"passTasks":[],"count":0}},
+    "gate2":{"pass":false,"evidence":{}},
+    "gate3":{"pass":false,"evidence":{"passing":[]}},
+    "gate4":{"pass":true,"evidence":{"passing":[{"id":"mandelbrot","shared":true,"fidelityRatio":0.997997203044166,"modeId":0,"counts":{"evolution":16,"anneal":8}},{"id":"parity","shared":true,"fidelityRatio":0.9995177760149682,"modeId":0,"counts":{"evolution":62,"anneal":49}}]}},
+    "gate5":{"pass":true,"evidence":{"passing":[{"id":"gcd","modeId":0,"name":"IDENTITY","bestR2":0.9924623440975113,"probeCount":1000},{"id":"sort4","modeId":0,"name":"IDENTITY","bestR2":0.9879449247696712,"probeCount":1000}]}}
+  }
+}

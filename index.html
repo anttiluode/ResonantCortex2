@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>ResonantCortex2 — Algorithm Search Lab</title>
+<style>
+:root{--bg:#0b0e13;--panel:#121821;--panel2:#192231;--line:#293448;--text:#edf2f8;--muted:#94a3b8;--ok:#58d68d;--bad:#ff7878;--warn:#f4c95d;--accent:#7aa2ff;--cyan:#63d7e8;--purple:#c18cff}
+*{box-sizing:border-box} body{margin:0;background:linear-gradient(180deg,#090c11,#0d121a 45%,#0b0e13);color:var(--text);font:14px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+header{padding:22px clamp(16px,4vw,48px);border-bottom:1px solid var(--line);background:#090c11dd;position:sticky;top:0;z-index:10;backdrop-filter:blur(8px)}
+h1{font-size:24px;margin:0 0 5px}.sub{color:var(--muted);max-width:1000px}main{padding:20px clamp(14px,3vw,36px) 56px;display:grid;gap:16px;max-width:1500px;margin:auto}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:15px;box-shadow:0 12px 30px #0003}.toolbar{display:flex;gap:10px 14px;flex-wrap:wrap;align-items:end}.toolbar label{display:grid;gap:5px;color:var(--muted);font-size:12px}.toolbar input,.toolbar select{background:#0b1119;border:1px solid var(--line);color:var(--text);padding:8px 9px;border-radius:8px;min-width:110px}button{background:#213559;border:1px solid #3b5790;color:white;padding:9px 13px;border-radius:9px;font-weight:700;cursor:pointer}button.secondary{background:#222a36;border-color:#394454}button:disabled{opacity:.42;cursor:not-allowed}.status{margin-left:auto;min-width:240px;color:var(--muted);padding:8px 10px;background:#0c1119;border:1px solid var(--line);border-radius:9px}.grid{display:grid;gap:14px}.grid2{grid-template-columns:1fr 1fr}.grid3{grid-template-columns:repeat(3,1fr)}@media(max-width:900px){.grid2,.grid3{grid-template-columns:1fr}.status{width:100%;margin-left:0}}
+.gates{display:grid;grid-template-columns:repeat(6,minmax(110px,1fr));gap:8px}@media(max-width:900px){.gates{grid-template-columns:repeat(2,1fr)}}.gate{padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}.gate b{display:block}.pass{color:var(--ok)}.fail{color:var(--bad)}.neutral{color:var(--muted)}
+table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:8px;border-bottom:1px solid var(--line);text-align:right}th:first-child,td:first-child{text-align:left}th{color:var(--muted);font-weight:650}.modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}.mode{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:10px}.mode h4{margin:0 0 6px;display:flex;justify-content:space-between}.kv{display:grid;grid-template-columns:1fr auto;gap:4px 10px;color:var(--muted);font-size:12px}.kv b{color:var(--text);font-weight:600}.route{display:flex;gap:6px;flex-wrap:wrap;min-height:48px;align-items:center}.chip{padding:5px 8px;border-radius:999px;background:#27344a;border:1px solid #3c4b65;font:12px ui-monospace,monospace}.chip.unknown{background:#4b2227;border-color:#7c343b;color:#ffb0b0}.canvasWrap{display:grid;grid-template-columns:1fr 1fr;gap:12px}.canvasWrap canvas{width:100%;image-rendering:pixelated;background:#05070a;border:1px solid var(--line);border-radius:10px}@media(max-width:700px){.canvasWrap{grid-template-columns:1fr}}
+.small{font-size:12px;color:var(--muted)}code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.warning{color:var(--warn)}.divider{height:1px;background:var(--line);margin:10px 0}.pill{display:inline-block;padding:3px 7px;border-radius:999px;background:#202a3a;color:var(--muted);font-size:11px}.resultBig{font-size:18px;font-weight:800}.note{border-left:3px solid var(--accent);padding-left:10px;color:var(--muted)}
+</style>
+</head>
+<body>
+<header>
+  <h1>ResonantCortex2 — Algorithm Search Lab</h1>
+  <div class="sub">Search → compress → route → iterate → interpret. The learner gets final task score, never the reference algorithm's intermediate states. Scientific failures stay visible.</div>
+</header>
+<main>
+  <section class="panel">
+    <div class="toolbar">
+      <label>Task to inspect<select id="task-select"><option value="mandelbrot">Mandelbrot</option><option value="gcd">GCD</option><option value="sort4">Sort 4</option><option value="parity">Parity</option></select></label>
+      <label>Seed<input id="seed" type="number" value="17"></label>
+      <label>Search budget / solver / task<input id="budget" type="number" value="4000" min="24" max="10000" step="24"></label>
+      <button id="run-search">Run search experiment</button>
+      <button id="compress" class="secondary" disabled>Inspect compression</button>
+      <button id="execute" class="secondary" disabled>Inspect execution</button>
+      <div id="engineering-status" class="status">Loading committed receipt…</div>
+    </div>
+    <div class="small" style="margin-top:9px">The preregistered full budget is 4,000 candidate evaluations per generator per task. Large browser runs can be CPU-heavy; the committed receipt uses a smaller deterministic budget and is labeled accordingly.</div>
+  </section>
+
+  <section class="panel">
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><b>Scientific gates</b><span class="pill">engineering green ≠ scientific success</span></div>
+    <div id="gate-grid" class="gates" style="margin-top:10px"></div>
+  </section>
+
+  <section class="panel">
+    <b>Task scoreboard</b>
+    <div style="overflow:auto;margin-top:8px"><table><thead><tr><th>Task</th><th>search evo</th><th>search anneal</th><th>modes</th><th>NMSE modes</th><th>NMSE global</th><th>compiled score</th><th>global score</th><th>compiled exact</th></tr></thead><tbody id="score-body"></tbody></table></div>
+  </section>
+
+  <section class="grid grid2">
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between"><b>Discovered local modes</b><span id="mode-summary" class="small"></span></div>
+      <div id="mode-grid" class="modes" style="margin-top:10px"></div>
+    </div>
+    <div class="panel">
+      <b>Frozen route on one held-out instance</b>
+      <div id="route-view" class="route" style="margin-top:10px"></div>
+      <div id="route-note" class="small" style="margin-top:8px"></div>
+      <div class="divider"></div>
+      <b>Interpretation rule</b>
+      <p class="note">The discovered circuit is ground truth. Names such as <span class="mono">IDENTITY</span> or <span class="mono">PERMUTE_OR_SWAP</span> are assigned only afterward when a fixed surrogate reaches the preregistered fidelity threshold. Otherwise the mode stays <span class="mono">UNNAMED</span>.</p>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><b>Mandelbrot recurrence test</b><span id="mandel-metrics" class="small"></span></div>
+    <div class="canvasWrap" style="margin-top:10px">
+      <div><div class="small">Reference escape map</div><canvas id="truth-canvas" width="384" height="384"></canvas></div>
+      <div><div class="small">Compiled routed-mode escape map</div><canvas id="compiled-canvas" width="384" height="384"></canvas></div>
+    </div>
+    <p class="small warning"><b>Separate integrity control:</b> the known-law / teacher-forced Mandelbrot control is displayed only to verify the renderer and scoring path. It is not evidence of algorithm discovery.</p>
+    <div id="control-note" class="small"></div>
+  </section>
+
+  <section class="panel">
+    <details open><summary><b>What this page is allowed to claim</b></summary>
+      <p class="small">Positive evidence requires held-out execution by the frozen compressed mode bank. Search score alone is not enough. Good local transition compression alone is not enough. A symbolic label alone is not enough. Gate failures remain failures in the committed receipt.</p>
+    </details>
+  </section>
+</main>
+<script type="module" src="./src/ui.js"></script>
+</body>
+</html>
