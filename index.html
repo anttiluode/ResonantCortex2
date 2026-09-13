@@ -91,6 +91,24 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:8px;borde
     <div id="control-note" class="small"></div>
   </section>
 
+
+  <section class="panel">
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><b>V2 — Causal control substrate</b><span class="pill">fixed dynamics · searched controls only</span></div>
+    <div id="v2-gates" class="gates" style="margin-top:10px"></div>
+    <div style="overflow:auto;margin-top:12px"><table><thead><tr><th>Task</th><th>search</th><th>exact</th><th>motifs</th><th>compiled</th><th>global</th><th>nearest</th><th>zero</th><th>UNKNOWN</th></tr></thead><tbody id="v2-task-table"></tbody></table></div>
+    <div class="grid grid2" style="margin-top:12px">
+      <div><b class="small">Control motifs</b><div id="v2-motif-view" class="route" style="margin-top:7px"></div></div>
+      <div><b class="small">Policy horizon survival</b><div id="v2-horizon-view" class="small" style="margin-top:7px"></div></div>
+    </div>
+    <p class="small note">V2 never predicts the next state. A routed motif emits only a bounded control vector; the fixed causal substrate generates every state transition.</p>
+  </section>
+
+  <section class="panel">
+    <div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><b>V3 — Global consistency / closed-loop fence</b><span id="v3-monitor-summary" class="small"></span></div>
+    <div style="overflow:auto;margin-top:10px"><table><thead><tr><th>Loop</th><th>local legal</th><th>readout closure</th><th>state closure</th><th>global closure</th></tr></thead><tbody id="v3-loop-table"></tbody></table></div>
+    <p class="small warning">A green local step is not a proof that a closed composition returned to the correct global state.</p>
+  </section>
+
   <section class="panel">
     <details open><summary><b>What this page is allowed to claim</b></summary>
       <p class="small">Positive evidence requires held-out execution by the frozen compressed mode bank. Search score alone is not enough. Good local transition compression alone is not enough. A symbolic label alone is not enough. Gate failures remain failures in the committed receipt.</p>

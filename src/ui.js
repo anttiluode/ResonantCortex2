@@ -1,11 +1,11 @@
-import { runExperiment } from './experiment.js';
+import { runV2V3Experiment } from './v2_experiment.js';
 
 const $=id=>document.getElementById(id);
 let currentReport=null;
 const fmt=(x,n=3)=>x==null?'—':Number.isFinite(Number(x))?Number(x).toFixed(n):'—';
 
 function gateText(k){
-  return ({gate0:'Local compression',gate1:'Compiled execution',gate2:'Search compressed',gate3:'Routing matters',gate4:'Cross-solver reuse',gate5:'Explanation fidelity',gate6:'Autonomy gap localized',gate7:'Successor routing improves'})[k]||k;
+  return ({gate0:'Local compression',gate1:'Compiled execution',gate2:'Search compressed',gate3:'Routing matters',gate4:'Cross-solver reuse',gate5:'Explanation fidelity',gate6:'Autonomy gap localized',gate7:'Successor routing improves',gate8:'Causal substrate valid',gate9:'Search finds controllable tasks',gate10:'Control compression generalizes',gate11:'Composition survives horizon',gate12:'Local legality ≠ global correctness',gate13:'Global monitor detects failures'})[k]||k;
 }
 
 function renderGates(report){
@@ -51,6 +51,7 @@ function renderRoute(report){
   }
   $('route-note').textContent=route.some(r=>r.modeId==='UNKNOWN')?'The frozen router reached a state outside every learned applicability region. It stopped rather than inventing a mode.':'Every recorded step found an applicable learned mode.';
 }
+
 
 function renderAutopsy(report){
   const id=$('task-select').value, t=report.tasks[id], a=t.autopsy||{};
@@ -100,6 +101,50 @@ function drawMap(canvas,data,side){
   const cw=canvas.width/side,ch=canvas.height/side;
   for(let y=0;y<side;y++) for(let x=0;x<side;x++){ ctx.fillStyle=colorFor(data[y*side+x]); ctx.fillRect(x*cw,y*ch,cw+.5,ch+.5); }
 }
+
+function renderV2(report){
+  const c=report.causalControl;
+  if(!c) return;
+  const gates=$('v2-gates'); gates.innerHTML='';
+  for(const k of ['gate8','gate9','gate10','gate11']){
+    const g=report.gates?.[k]; if(!g) continue;
+    const d=document.createElement('div'); d.className='gate';
+    d.innerHTML=`<b>${k.toUpperCase()} · ${gateText(k)}</b><div class="${g.pass?'pass':'fail'} resultBig">${g.pass?'PASS':'FAIL'}</div>`;
+    gates.appendChild(d);
+  }
+  const body=$('v2-task-table'); body.innerHTML='';
+  for(const [id,t] of Object.entries(c.tasks||{})){
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${id}</td><td>${fmt(t.search.score)}</td><td>${fmt(t.search.exact)}</td><td>${t.compiled.motifCount}</td><td>${fmt(t.compiled.score)}</td><td>${fmt(t.compiled.globalScore)}</td><td>${fmt(t.compiled.nearestScore)}</td><td>${fmt(t.compiled.zeroScore)}</td><td>${fmt(t.compiled.unknownRate)}</td>`;
+    body.appendChild(tr);
+  }
+  const motif=$('v2-motif-view'); motif.innerHTML='';
+  for(const [id,t] of Object.entries(c.tasks||{})){
+    const chip=document.createElement('span'); chip.className='chip';
+    chip.textContent=`${id}: ${t.compiled.usedMotifs}/${t.compiled.motifCount} used`;
+    motif.appendChild(chip);
+  }
+  const hv=$('v2-horizon-view'); hv.innerHTML='';
+  for(const [id,t] of Object.entries(c.tasks||{})){
+    const d=document.createElement('div');
+    d.textContent=`${id}: h1 ${fmt(t.horizon.h1,4)} · h8 ${fmt(t.horizon.h8,4)} · abstain ${fmt(t.horizon.earlyAbstentionRate,3)}`;
+    hv.appendChild(d);
+  }
+}
+
+function renderV3(report){
+  const g=report.globalConsistency;
+  if(!g||!Array.isArray(g.episodes)) return;
+  const m=g.monitor||{};
+  $('v3-monitor-summary').textContent=`threshold ${fmt(m.threshold,3)} · bad recall ${fmt(m.badRecall,3)} · false positive ${fmt(m.falsePositiveRate,3)}`;
+  const body=$('v3-loop-table'); body.innerHTML='';
+  for(const e of g.episodes){
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${e.name}</td><td class="${e.localLegal?'pass':'fail'}">${e.localLegal?'YES':'NO'}</td><td>${fmt(e.readoutClosure,4)}</td><td>${fmt(e.invariantClosure,4)}</td><td class="${e.closureError>0.10?'fail':'pass'}">${fmt(e.closureError,4)}</td>`;
+    body.appendChild(tr);
+  }
+}
+
 function renderMandel(report){
   const t=report.tasks.mandelbrot,e=t.execution;
   drawMap($('truth-canvas'),e.truthEscape,e.gridSide); drawMap($('compiled-canvas'),e.compiledEscape,e.gridSide);
@@ -111,7 +156,7 @@ function renderMandel(report){
 function render(report){
   currentReport=report;
   $('engineering-status').textContent=`Engineering ${report.engineering?.ok?'OK':'ERROR'} · seed ${report.config?.seed} · budget ${report.config?.budget} · ${report.config?.evalScale}`;
-  renderGates(report); renderScore(report); renderModes(report); renderRoute(report); renderAutopsy(report); renderSuccessor(report); renderMandel(report);
+  renderGates(report); renderScore(report); renderModes(report); renderRoute(report); renderAutopsy(report); renderSuccessor(report); renderMandel(report); renderV2(report); renderV3(report);
   $('compress').disabled=false; $('execute').disabled=false;
 }
 
@@ -128,7 +173,8 @@ $('run-search').addEventListener('click',()=>{
   setTimeout(()=>{
     try{
       const seed=Number($('seed').value)||17, budget=Math.max(24,Number($('budget').value)||4000);
-      const report=runExperiment({seed,budget,instances:12,evalScale:budget>=1000?'receipt':'smoke',searchOnlySample:0});
+      const liveBudget=Math.min(400,budget);
+      const report=runV2V3Experiment({seed,v1Budget:Math.min(120,liveBudget),controlBudget:liveBudget,controlInstances:10,controlEvalCount:liveBudget>=200?32:12,evalScale:liveBudget>=200?'receipt':'smoke',includeV3:true});
       render(report);
     }catch(err){ $('engineering-status').textContent=`Run failed: ${err.message}`; console.error(err); }
     finally{btn.disabled=false;}
