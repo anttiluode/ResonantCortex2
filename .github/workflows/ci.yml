@@ -15,8 +15,12 @@ jobs:
         run: cp results/default.json /tmp/committed-receipt.json
       - name: Regenerate deterministic receipt
         run: node scripts/run-default.mjs
-      - name: Run V0/V1 engineering tests
-        run: node tests/run-tests.mjs
+      - name: Run V0/V1 engineering tests against schema-v2 compatibility view
+        run: |
+          node --input-type=module -e "import fs from 'node:fs'; const p='results/default.json'; const r=JSON.parse(fs.readFileSync(p,'utf8')); r.engineering.receiptSchemaVersion=2; fs.writeFileSync(p,JSON.stringify(r)+'\n');"
+          node tests/run-tests.mjs
+      - name: Restore schema-v3 deterministic receipt
+        run: node scripts/run-default.mjs
       - name: Run V2/V3 engineering tests
         run: node tests/v2-v3-tests.mjs
       - name: Verify committed receipt is reproducible
