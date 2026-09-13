@@ -1,6 +1,6 @@
 # ResonantCortex2 — Algorithm Search Lab
 
-**Status: working V0 laboratory; algorithm compilation is _not yet demonstrated_.**
+**Status: V1 diagnostic laboratory; algorithm compilation is _not yet demonstrated_. Gate 6 localizes the autonomy failure; Gate 7 successor lookahead does not yet solve it.**
 
 Live Pages target: `https://anttiluode.github.io/ResonantCortex2/`
 
@@ -67,7 +67,7 @@ Successful transitions are later compressed into local affine modes. Each mode s
 
 Frozen execution uses hard top-1 routing. If no mode explains the current state well enough, execution returns `UNKNOWN` instead of choosing an arbitrary route.
 
-## Four V0 tasks
+## Four benchmark tasks
 
 1. **Mandelbrot recurrence** — discover a recurrent approximation that reproduces held-out escape-time structure without receiving `z² + c` as a primitive.
 2. **Euclidean GCD** — solve unseen integer pairs through recurrent state without a `gcd` or complete Euclidean-step primitive.
@@ -92,6 +92,8 @@ The receipt uses seed `17`, budget `120` candidate evaluations per generator per
 | Gate 3 — routing matters | **FAIL** | No Gate-1-passing task exists to support a causal routing claim. |
 | Gate 4 — cross-solver reuse | **PASS** | Shared high-scoring trace geometry appears for Mandelbrot and parity. This is weaker than algorithm success. |
 | Gate 5 — explanation fidelity | **PASS** | At least one frozen mode admits a high-fidelity simple post-hoc surrogate; current winners are largely identity-like. |
+| Gate 6 — autonomy gap localized | **PASS** | Teacher-state local prediction can be very good while open-loop replay drifts strongly on the same frozen modes. |
+| Gate 7 — successor routing improves | **FAIL** | One-step successor lookahead helps some scores / UNKNOWN rates, but not by the preregistered amount needed to count as useful algorithmic continuation. |
 
 ### Selected current numbers
 
@@ -102,9 +104,35 @@ The receipt uses seed `17`, budget `120` candidate evaluations per generator per
 | Sort 4 | 3 | 2 | ~0 | ~0 | 0.367 | 0.408 | exact 0.000 |
 | Parity | 13 | 1 | 0.44268 | 0.44268 | 0.557 | 0.573 | exact 0.469 |
 
-The interesting failure is clear: **some searched trajectories contain locally compressible and cross-solver structure, but fitting those fragments does not yet produce a useful autonomous recurrent program.** The current bottleneck is composition/routing, not merely finding low local transition error.
+The interesting failure is clear: **some searched trajectories contain locally compressible and cross-solver structure, but fitting those fragments does not yet produce a useful autonomous recurrent program.** V1 now sharpens that statement: the dominant failure is usually **accumulated rollout drift**, not simply a bad source-state router.
 
-That distinction is exactly why the project has separate gates.
+### V1 computation autopsy
+
+V1 separates the coordinates controlled by the task environment from the **endogenous** coordinates the discovered computation must maintain itself. It then compares teacher-state one-step prediction, fixed route replay, free routing, and an oracle-best-existing-mode diagnostic.
+
+| Task | teacher one-step endogenous | fixed replay h4 | free replay h4 | h8 (when available) | diagnosis |
+| --- | ---: | ---: | ---: | ---: | --- |
+| Mandelbrot | 0.00398 | 0.04250 | 0.04453 | fixed 0.12729 | **accumulation** |
+| GCD | 0.00058 | 0.00007 | 0.00007 | 0.00016 | mixed / no large early gap |
+| Sort 4 | 0.00002 | 0.00004 | 0.00004 | 0.00004 | accumulation (small absolute scale) |
+| Parity | 0.01013 | 0.04060 | 0.04060 | 0.08386 | **accumulation** |
+
+The important point is that Mandelbrot and parity do **not** mainly fail because the router chooses the wrong branch at the first opportunity. A locally good operator sequence, replayed open-loop, leaves the searched trajectory because small approximation errors compound.
+
+### V1 successor routing
+
+A second arm learns mode-to-mode transition probabilities from the successful searched traces and lets a candidate mode look one step into its own predicted future before firing. This helps, but not enough:
+
+| Task | source-only score | successor score | global score | source UNKNOWN | successor UNKNOWN |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Mandelbrot | 0.476 | **0.514** | 0.705 | 0.780 | **0.535** |
+| GCD | 0.021 | 0.021 | 0.021 | 1.000 | 1.000 |
+| Sort 4 | 0.367 | 0.367 | 0.408 | 1.000 | 1.000 |
+| Parity | 0.557 | **0.588** | 0.573 | 0.391 | 0.344 |
+
+So Gate 7 stays **FAIL**. The one-step lookahead is directionally useful on Mandelbrot and parity, but it does not close the loop strongly enough to become an autonomous algorithm. The next problem is therefore more precise: **learn operators whose outputs remain on the reusable computational manifold under repeated composition**, not merely operators with low one-step error.
+
+That distinction is exactly why the project keeps local prediction, rollout autonomy, and held-out task success as separate measurements.
 
 ## Browser lab
 
@@ -112,12 +140,14 @@ That distinction is exactly why the project has separate gates.
 
 - deterministic seed and search budget,
 - task inspection,
-- Gate 0–5 status,
+- Gate 0–7 status,
 - evolutionary vs annealing search scores,
 - local-vs-global compression error,
 - discovered mode cards,
 - post-hoc names or `UNNAMED`,
 - a frozen route sequence with explicit `UNKNOWN`,
+- Gate 6 computation-autopsy horizon curves and failure classification,
+- Gate 7 successor edges / continuation-aware route diagnostics,
 - reference vs compiled Mandelbrot escape maps,
 - the separate known-law integrity control.
 
@@ -150,8 +180,10 @@ src/
   operators.js     unnamed gated-affine microcircuits
   search.js        evolutionary + annealing trace generators
   compress.js      transition fitting and local mode compression
-  executor.js      geometric routing and recurrence
-  metrics.js       baselines and preregistered Gates 0–5
+  executor.js      source-only + successor-aware routing and recurrence
+  autopsy.js       teacher/replay/free/oracle rollout diagnostics
+  successor.js     learned mode-transition graph + lookahead router
+  metrics.js       baselines and preregistered Gates 0–7
   interpreter.js   post-hoc mode probing / naming
   experiment.js    end-to-end experiment orchestration
 scripts/
@@ -174,4 +206,4 @@ A pretty Mandelbrot control is not discovery.
 
 The hypothesis earns support only when the **frozen compressed routed machine itself** solves held-out tasks under the preregistered gates.
 
-V0 does not do that yet. That failure is the starting point for the next experiment, not something to hide.
+V1 still does not do that. Gate 6 tells us where autonomy is being lost; Gate 7 shows that a one-step successor prior alone is not enough. That failure is the starting point for the next experiment, not something to hide.

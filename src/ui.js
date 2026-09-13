@@ -5,7 +5,7 @@ let currentReport=null;
 const fmt=(x,n=3)=>x==null?'—':Number.isFinite(Number(x))?Number(x).toFixed(n):'—';
 
 function gateText(k){
-  return ({gate0:'Local compression',gate1:'Compiled execution',gate2:'Search compressed',gate3:'Routing matters',gate4:'Cross-solver reuse',gate5:'Explanation fidelity'})[k]||k;
+  return ({gate0:'Local compression',gate1:'Compiled execution',gate2:'Search compressed',gate3:'Routing matters',gate4:'Cross-solver reuse',gate5:'Explanation fidelity',gate6:'Autonomy gap localized',gate7:'Successor routing improves'})[k]||k;
 }
 
 function renderGates(report){
@@ -21,7 +21,7 @@ function renderScore(report){
   const body=$('score-body'); body.innerHTML='';
   for(const [id,t] of Object.entries(report.tasks||{})){
     const tr=document.createElement('tr');
-    tr.innerHTML=`<td>${id}</td><td>${fmt(t.search.evolution.bestScore)}</td><td>${fmt(t.search.anneal.bestScore)}</td><td>${t.compression.modeCount}</td><td>${fmt(t.compression.nmseModes,4)}</td><td>${fmt(t.compression.nmseGlobal,4)}</td><td>${fmt(t.execution.compiledScore)}</td><td>${fmt(t.execution.globalScore)}</td><td>${fmt(t.execution.compiledExact)}</td>`;
+    tr.innerHTML=`<td>${id}</td><td>${fmt(t.search.evolution.bestScore)}</td><td>${fmt(t.search.anneal.bestScore)}</td><td>${t.compression.modeCount}</td><td>${fmt(t.compression.nmseModes,4)}</td><td>${fmt(t.compression.nmseGlobal,4)}</td><td>${fmt(t.execution.compiledScore)}</td><td>${fmt(t.successorExecution?.score)}</td><td>${fmt(t.execution.globalScore)}</td><td>${fmt(t.execution.compiledExact)}</td>`;
     body.appendChild(tr);
   }
 }
@@ -52,6 +52,43 @@ function renderRoute(report){
   $('route-note').textContent=route.some(r=>r.modeId==='UNKNOWN')?'The frozen router reached a state outside every learned applicability region. It stopped rather than inventing a mode.':'Every recorded step found an applicable learned mode.';
 }
 
+function renderAutopsy(report){
+  const id=$('task-select').value, t=report.tasks[id], a=t.autopsy||{};
+  $('autopsy-summary').textContent=`${a.dominantFailure||'unavailable'} · teacher endogenous ${fmt(a.teacherOneStepEndogenous,5)} · oracle ${fmt(a.oracleOneStepEndogenous,5)} · ${a.eligibleTransitions??0} transitions`;
+  const body=$('autopsy-table'); body.innerHTML='';
+  const horizons=a.horizons||{};
+  for(const h of [1,2,4,8,16,32]){
+    const x=horizons[h]||horizons[String(h)]; if(!x) continue;
+    const tr=document.createElement('tr');
+    tr.innerHTML=`<td>${h}</td><td>${fmt(x.fixedEndogenous,5)}</td><td>${fmt(x.freeEndogenous,5)}</td><td>${fmt(x.oracleEndogenous,5)}</td><td>${fmt(x.manifoldSurvival,3)}</td><td>${fmt(x.unknownRate,3)}</td>`;
+    body.appendChild(tr);
+  }
+  if(!body.children.length){ const tr=document.createElement('tr'); tr.innerHTML='<td colspan="6" class="small">No eligible successful trace horizons.</td>'; body.appendChild(tr); }
+}
+
+function renderSuccessor(report){
+  const id=$('task-select').value, t=report.tasks[id], e=t.successorExecution||{}, graph=t.successorGraph||{};
+  const gain=(Number(e.score)-Number(e.sourceOnlyScore));
+  $('successor-score').textContent=`source ${fmt(e.sourceOnlyScore)} → successor ${fmt(e.score)} (Δ ${fmt(gain)}) · global ${fmt(e.globalScore)}`;
+  const edges=$('successor-edges'); edges.innerHTML='';
+  for(const edge of (graph.edges||[]).slice(0,12)){
+    const chip=document.createElement('span'); chip.className='chip';
+    chip.textContent=`M${edge.from} → M${edge.to}  p=${fmt(edge.prob,2)}`;
+    chip.title=`observed ${edge.count} times`;
+    edges.appendChild(chip);
+  }
+  if(!edges.children.length) edges.textContent='No repeated successor edges learned.';
+  const route=$('successor-route'); route.innerHTML='';
+  for(const r of (e.sampleRoute||[])){
+    const chip=document.createElement('span'); chip.className='chip'+(r.modeId==='UNKNOWN'?' unknown':'');
+    if(r.modeId==='UNKNOWN') chip.textContent='UNKNOWN';
+    else chip.textContent=`M${r.modeId}${r.expectedSuccessorId==null?'':` → M${r.expectedSuccessorId}`}`;
+    if(Number.isFinite(r.continuationCost)) chip.title=`continuation cost ${fmt(r.continuationCost,3)} · source ${fmt(r.sourceCost,3)} · destination ${fmt(r.destCost,3)} · prior ${fmt(r.prior,3)}`;
+    route.appendChild(chip);
+  }
+  if(!route.children.length) route.textContent='No successor route recorded.';
+}
+
 function colorFor(v,max=32){
   const t=Math.max(0,Math.min(1,v/max));
   const r=Math.round(40+200*t), g=Math.round(30+120*(1-Math.abs(t-.5)*2)), b=Math.round(120+120*(1-t));
@@ -74,7 +111,7 @@ function renderMandel(report){
 function render(report){
   currentReport=report;
   $('engineering-status').textContent=`Engineering ${report.engineering?.ok?'OK':'ERROR'} · seed ${report.config?.seed} · budget ${report.config?.budget} · ${report.config?.evalScale}`;
-  renderGates(report); renderScore(report); renderModes(report); renderRoute(report); renderMandel(report);
+  renderGates(report); renderScore(report); renderModes(report); renderRoute(report); renderAutopsy(report); renderSuccessor(report); renderMandel(report);
   $('compress').disabled=false; $('execute').disabled=false;
 }
 
@@ -83,9 +120,9 @@ async function loadReceipt(){
   catch(err){ $('engineering-status').textContent=`Committed receipt unavailable: ${err.message}`; }
 }
 
-$('task-select').addEventListener('change',()=>{if(currentReport){renderModes(currentReport);renderRoute(currentReport);}});
+$('task-select').addEventListener('change',()=>{if(currentReport){renderModes(currentReport);renderRoute(currentReport);renderAutopsy(currentReport);renderSuccessor(currentReport);}});
 $('compress').addEventListener('click',()=>{if(currentReport)renderModes(currentReport);});
-$('execute').addEventListener('click',()=>{if(currentReport){renderRoute(currentReport);renderMandel(currentReport);}});
+$('execute').addEventListener('click',()=>{if(currentReport){renderRoute(currentReport);renderAutopsy(currentReport);renderSuccessor(currentReport);renderMandel(currentReport);}});
 $('run-search').addEventListener('click',()=>{
   const btn=$('run-search'); btn.disabled=true; $('engineering-status').textContent='Running deterministic search/compression/execution…';
   setTimeout(()=>{

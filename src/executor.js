@@ -1,5 +1,6 @@
 import { sourceResidual, applyAffine } from './compress.js';
 import { TASKS, initialState, applyEnvironment, scoreState, isTerminal } from './tasks.js';
+import { routeModeSuccessor } from './successor.js';
 
 export function routeMode(modes,state,disabledIds=[]){
   let best=null;
@@ -14,7 +15,7 @@ export function routeMode(modes,state,disabledIds=[]){
   return {...best,gate};
 }
 
-export function executeModes({taskId,instance,modes,globalMode=null,maxSteps=TASKS[taskId].maxSteps,disabledIds=[],routing='routed'}={}){
+export function executeModes({taskId,instance,modes,globalMode=null,maxSteps=TASKS[taskId].maxSteps,disabledIds=[],routing='routed',successorGraph=null}={}){
   let state=initialState(taskId,instance);
   const trace=[state.slice()], route=[];
   for(let step=0;step<maxSteps;step++){
@@ -24,12 +25,25 @@ export function executeModes({taskId,instance,modes,globalMode=null,maxSteps=TAS
       const active=modes.filter(m=>!disabledIds.includes(m.id));
       const m=active.length?active[step%active.length]:null;
       modeInfo=m?{mode:m,residual:sourceResidual(m,state),gate:1}:null;
+    } else if(routing==='successor'){
+      modeInfo=routeModeSuccessor({modes,state,taskId,instance,step,successorGraph,disabledIds});
     } else modeInfo=routeMode(modes,state,disabledIds);
     if(!modeInfo){ route.push({modeId:'UNKNOWN',residual:null}); break; }
     state=applyAffine(modeInfo.mode,state);
     state=applyEnvironment(taskId,instance,state,step);
     trace.push(state.slice());
-    route.push({modeId:modeInfo.mode.id,residual:modeInfo.residual,gate:modeInfo.gate});
+    route.push({
+      modeId:modeInfo.mode.id,
+      residual:modeInfo.residual,
+      gate:modeInfo.gate,
+      ...(routing==='successor'?{
+        expectedSuccessorId:modeInfo.expectedSuccessorId,
+        sourceCost:modeInfo.sourceCost,
+        destCost:modeInfo.destCost,
+        prior:modeInfo.prior,
+        continuationCost:modeInfo.continuationCost
+      }:{})
+    });
     if(isTerminal(taskId,instance,state,step)) break;
   }
   return {state,trace,route,score:scoreState(taskId,instance,state,trace),unknown:route.some(r=>r.modeId==='UNKNOWN'),steps:trace.length-1};
