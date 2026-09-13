@@ -3,6 +3,8 @@ import { TASKS, makeInstance, initialState, applyEnvironment, scoreState, exactS
 import { searchEvolution, searchAnneal } from './search.js';
 import { transitionsFromTraces, compressTransitions, sourceResidual } from './compress.js';
 import { executeModes } from './executor.js';
+import { autopsyTrace, summarizeAutopsy, stateError, ENDOGENOUS_DIMS } from './autopsy.js';
+import { buildSuccessorGraph } from './successor.js';
 import { evaluateGates, pearson, normalizedMae, modeParameterCount, trainTinyBaseline, predictTinyBaseline } from './metrics.js';
 import { interpretMode, modeStructuralSummary } from './interpreter.js';
 
@@ -47,7 +49,7 @@ function evaluateDiscrete(taskId,instances,modes,globalMode,tiny){
     const g=executeModes({taskId,instance:inst,modes,globalMode,routing:'global'});
     const n=executeTiny(taskId,inst,tiny);
     compiledOps+=c.steps;
-    compiled.push({score:c.score,exact:exactSuccess(taskId,inst,c.state,c.trace),route:c.route});
+    compiled.push({score:c.score,exact:exactSuccess(taskId,inst,c.state,c.trace),route:c.route,unknown:c.unknown});
     global.push({score:g.score,exact:exactSuccess(taskId,inst,g.state,g.trace)});
     neural.push({score:n.score,exact:n.exact});
   }
@@ -59,18 +61,19 @@ function evaluateDiscrete(taskId,instances,modes,globalMode,tiny){
     globalExact:mean(global.map(x=>x.exact?1:0)),
     neuralExact:mean(neural.map(x=>x.exact?1:0)),
     compiledOperations:compiledOps,
+    unknownRate:mean(compiled.map(x=>x.unknown?1:0)),
     sampleRoute:compiled[0]?.route??[]
   };
 }
 
 function evaluateMandelbrot(instances,modes,globalMode,tiny){
-  const truth=[], compiled=[], global=[], neural=[]; let compiledOps=0;
+  const truth=[], compiled=[], global=[], neural=[], compiledUnknown=[]; let compiledOps=0;
   for(const inst of instances){
     const c=executeModes({taskId:'mandelbrot',instance:inst,modes,globalMode});
     const g=executeModes({taskId:'mandelbrot',instance:inst,modes,globalMode,routing:'global'});
     const n=executeTiny('mandelbrot',inst,tiny);
     truth.push(inst.truthEscape);
-    compiled.push(readAnswer('mandelbrot',inst,c.state,c.trace));
+    compiled.push(readAnswer('mandelbrot',inst,c.state,c.trace)); compiledUnknown.push(c.unknown?1:0);
     global.push(readAnswer('mandelbrot',inst,g.state,g.trace));
     neural.push(readAnswer('mandelbrot',inst,n.state,n.trace));
     compiledOps+=c.steps;
@@ -82,10 +85,59 @@ function evaluateMandelbrot(instances,modes,globalMode,tiny){
     globalCorr:pearson(global,truth), globalNmae:gn,
     neuralCorr:pearson(neural,truth), neuralNmae:nn,
     compiledOperations:compiledOps,
+    unknownRate:mean(compiledUnknown),
     truthEscape:truth, compiledEscape:compiled, globalEscape:global,
     gridSide:instances[0]?.gridSide??0,
     sampleRoute:instances.length?executeModes({taskId:'mandelbrot',instance:instances[Math.floor(instances.length/2)],modes,globalMode}).route:[]
   };
+}
+
+function evaluateSuccessorDiscrete(taskId,instances,modes,globalMode,successorGraph){
+  const rows=[]; let operations=0;
+  for(const inst of instances){
+    const r=executeModes({taskId,instance:inst,modes,globalMode,routing:'successor',successorGraph});
+    operations+=r.steps;
+    rows.push({score:r.score,exact:exactSuccess(taskId,inst,r.state,r.trace),route:r.route,unknown:r.unknown});
+  }
+  return {
+    score:mean(rows.map(x=>x.score)),
+    exact:mean(rows.map(x=>x.exact?1:0)),
+    operations,
+    unknownRate:mean(rows.map(x=>x.unknown?1:0)),
+    sampleRoute:rows[0]?.route??[]
+  };
+}
+
+function evaluateSuccessorMandelbrot(instances,modes,globalMode,successorGraph){
+  const truth=[],pred=[]; const rows=[]; let operations=0;
+  for(const inst of instances){
+    const r=executeModes({taskId:'mandelbrot',instance:inst,modes,globalMode,routing:'successor',successorGraph});
+    truth.push(inst.truthEscape);
+    pred.push(readAnswer('mandelbrot',inst,r.state,r.trace));
+    operations+=r.steps;
+    rows.push(r);
+  }
+  const nmae=normalizedMae(pred,truth,32);
+  return {
+    score:Math.max(0,1-nmae),
+    correlation:pearson(pred,truth),
+    normalizedMae:nmae,
+    operations,
+    unknownRate:mean(rows.map(x=>x.unknown?1:0)),
+    sampleRoute:rows[0]?.route??[],
+    escape:pred
+  };
+}
+
+function successorHorizonError(taskId,traces,modes,globalMode,successorGraph,horizon=8){
+  const errs=[];
+  for(const trace of traces){
+    if(!trace.instance || trace.states.length<=horizon) continue;
+    const run=executeModes({taskId,instance:trace.instance,modes,globalMode,routing:'successor',successorGraph,maxSteps:horizon});
+    if(run.trace.length<=horizon) continue;
+    errs.push(stateError(taskId,run.trace[horizon],trace.states[horizon],ENDOGENOUS_DIMS[taskId]));
+  }
+  return errs.length?mean(errs):null;
 }
 
 function crossSolverEvidence(modes,transitions){
@@ -155,6 +207,20 @@ export function runExperiment(config={}){
     const tiny=enoughTransitions?trainTinyBaseline(transitions,Math.max(1,modeParams),deriveSeed(cfg.seed,`${taskId}:tiny`),30):null;
     const evals=evalInstances(taskId,cfg.seed,cfg.evalScale);
     const execution=taskId==='mandelbrot'?evaluateMandelbrot(evals,comp.modes,comp.globalMode,tiny):evaluateDiscrete(taskId,evals,comp.modes,comp.globalMode,tiny);
+    const autopsyReports=traces.map(trace=>autopsyTrace({taskId,trace,modes:comp.modes,globalMode:comp.globalMode}));
+    const autopsy=summarizeAutopsy(taskId,autopsyReports);
+    const successorGraph=buildSuccessorGraph(comp.modes,traces);
+    const successorRaw=taskId==='mandelbrot'
+      ? evaluateSuccessorMandelbrot(evals,comp.modes,comp.globalMode,successorGraph)
+      : evaluateSuccessorDiscrete(taskId,evals,comp.modes,comp.globalMode,successorGraph);
+    const successorExecution={
+      ...successorRaw,
+      sourceOnlyScore:execution.compiledScore,
+      globalScore:execution.globalScore,
+      sourceOnlyUnknownRate:execution.unknownRate??0,
+      horizon8Endogenous:successorHorizonError(taskId,traces,comp.modes,comp.globalMode,successorGraph,8),
+      sourceOnlyHorizon8Endogenous:autopsy.horizons?.[8]?.freeEndogenous??null
+    };
     execution.searchOnlyComplete=false;
     execution.searchOnlyScore=null;
     execution.searchCandidateEvaluations=2*cfg.budget*evals.length;
@@ -169,13 +235,16 @@ export function runExperiment(config={}){
       search:{evolution:{bestScore:evo.bestScore,evaluations:evo.evaluations},anneal:{bestScore:ann.bestScore,evaluations:ann.evaluations}},
       compression:{modeCount:comp.modes.length,nmseModes:comp.validation.nmseModes,nmseGlobal:comp.validation.nmseGlobal,validationCount:comp.validation.count,successfulTraceCount:traces.length,successfulTransitionCount:transitions.length,available:enoughTransitions},
       execution,ablation:disabled,crossSolver:cross,interpretation,
+      autopsy,
+      successorGraph,
+      successorExecution,
       modes:comp.modes.map(m=>({id:m.id,prototype:m.prototype,scale:m.scale,threshold:m.threshold,A:m.A,b:m.b,trainSolvers:m.trainSolvers,count:m.count})),
       parameterCount:{modes:modeParams,neural:tiny?.paramCount??0}
     };
     baselines[taskId]={globalScore:execution.globalScore,neuralScore:execution.neuralScore??null};
   }
   const report={
-    engineering:{ok:true,version:1,receiptSchemaVersion:1},
+    engineering:{ok:true,version:2,receiptSchemaVersion:2},
     config:{...cfg,fullDefault:{budgetPerGeneratorPerTask:4000,mandelbrotGrid:'96x96',gcdHeldout:128,sort4Heldout:256,parityHeldout:256}},
     tasks,baselines,
     controls:{mandelbrotImitation:runMandelbrotImitationControl({side:cfg.evalScale==='full'?96:24})}

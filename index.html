@@ -10,7 +10,7 @@
 header{padding:22px clamp(16px,4vw,48px);border-bottom:1px solid var(--line);background:#090c11dd;position:sticky;top:0;z-index:10;backdrop-filter:blur(8px)}
 h1{font-size:24px;margin:0 0 5px}.sub{color:var(--muted);max-width:1000px}main{padding:20px clamp(14px,3vw,36px) 56px;display:grid;gap:16px;max-width:1500px;margin:auto}
 .panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:15px;box-shadow:0 12px 30px #0003}.toolbar{display:flex;gap:10px 14px;flex-wrap:wrap;align-items:end}.toolbar label{display:grid;gap:5px;color:var(--muted);font-size:12px}.toolbar input,.toolbar select{background:#0b1119;border:1px solid var(--line);color:var(--text);padding:8px 9px;border-radius:8px;min-width:110px}button{background:#213559;border:1px solid #3b5790;color:white;padding:9px 13px;border-radius:9px;font-weight:700;cursor:pointer}button.secondary{background:#222a36;border-color:#394454}button:disabled{opacity:.42;cursor:not-allowed}.status{margin-left:auto;min-width:240px;color:var(--muted);padding:8px 10px;background:#0c1119;border:1px solid var(--line);border-radius:9px}.grid{display:grid;gap:14px}.grid2{grid-template-columns:1fr 1fr}.grid3{grid-template-columns:repeat(3,1fr)}@media(max-width:900px){.grid2,.grid3{grid-template-columns:1fr}.status{width:100%;margin-left:0}}
-.gates{display:grid;grid-template-columns:repeat(6,minmax(110px,1fr));gap:8px}@media(max-width:900px){.gates{grid-template-columns:repeat(2,1fr)}}.gate{padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}.gate b{display:block}.pass{color:var(--ok)}.fail{color:var(--bad)}.neutral{color:var(--muted)}
+.gates{display:grid;grid-template-columns:repeat(auto-fit,minmax(135px,1fr));gap:8px}@media(max-width:900px){.gates{grid-template-columns:repeat(2,1fr)}}.gate{padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--panel2)}.gate b{display:block}.pass{color:var(--ok)}.fail{color:var(--bad)}.neutral{color:var(--muted)}
 table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:8px;border-bottom:1px solid var(--line);text-align:right}th:first-child,td:first-child{text-align:left}th{color:var(--muted);font-weight:650}.modes{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:10px}.mode{background:var(--panel2);border:1px solid var(--line);border-radius:11px;padding:10px}.mode h4{margin:0 0 6px;display:flex;justify-content:space-between}.kv{display:grid;grid-template-columns:1fr auto;gap:4px 10px;color:var(--muted);font-size:12px}.kv b{color:var(--text);font-weight:600}.route{display:flex;gap:6px;flex-wrap:wrap;min-height:48px;align-items:center}.chip{padding:5px 8px;border-radius:999px;background:#27344a;border:1px solid #3c4b65;font:12px ui-monospace,monospace}.chip.unknown{background:#4b2227;border-color:#7c343b;color:#ffb0b0}.canvasWrap{display:grid;grid-template-columns:1fr 1fr;gap:12px}.canvasWrap canvas{width:100%;image-rendering:pixelated;background:#05070a;border:1px solid var(--line);border-radius:10px}@media(max-width:700px){.canvasWrap{grid-template-columns:1fr}}
 .small{font-size:12px;color:var(--muted)}code,.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.warning{color:var(--warn)}.divider{height:1px;background:var(--line);margin:10px 0}.pill{display:inline-block;padding:3px 7px;border-radius:999px;background:#202a3a;color:var(--muted);font-size:11px}.resultBig{font-size:18px;font-weight:800}.note{border-left:3px solid var(--accent);padding-left:10px;color:var(--muted)}
 </style>
@@ -41,7 +41,7 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:8px;borde
 
   <section class="panel">
     <b>Task scoreboard</b>
-    <div style="overflow:auto;margin-top:8px"><table><thead><tr><th>Task</th><th>search evo</th><th>search anneal</th><th>modes</th><th>NMSE modes</th><th>NMSE global</th><th>compiled score</th><th>global score</th><th>compiled exact</th></tr></thead><tbody id="score-body"></tbody></table></div>
+    <div style="overflow:auto;margin-top:8px"><table><thead><tr><th>Task</th><th>search evo</th><th>search anneal</th><th>modes</th><th>NMSE modes</th><th>NMSE global</th><th>compiled score</th><th>successor score</th><th>global score</th><th>compiled exact</th></tr></thead><tbody id="score-body"></tbody></table></div>
   </section>
 
   <section class="grid grid2">
@@ -56,6 +56,28 @@ table{width:100%;border-collapse:collapse;font-size:12px}th,td{padding:8px;borde
       <div class="divider"></div>
       <b>Interpretation rule</b>
       <p class="note">The discovered circuit is ground truth. Names such as <span class="mono">IDENTITY</span> or <span class="mono">PERMUTE_OR_SWAP</span> are assigned only afterward when a fixed surrogate reaches the preregistered fidelity threshold. Otherwise the mode stays <span class="mono">UNNAMED</span>.</p>
+    </div>
+  </section>
+
+  <section class="grid grid2">
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><b>Computation Autopsy — Gate 6</b><span id="autopsy-summary" class="small"></span></div>
+      <div style="overflow:auto;margin-top:10px">
+        <table>
+          <thead><tr><th>horizon</th><th>fixed route</th><th>free route</th><th>oracle replay</th><th>manifold alive</th><th>UNKNOWN</th></tr></thead>
+          <tbody id="autopsy-table"></tbody>
+        </table>
+      </div>
+      <p class="small note">Teacher-state error asks whether a local mode works when repeatedly returned to the searched trajectory. Replay error asks whether those same local steps survive their own outputs.</p>
+    </div>
+    <div class="panel">
+      <div style="display:flex;justify-content:space-between;gap:12px;align-items:center"><b>Successor Routing — Gate 7</b><span id="successor-score" class="small"></span></div>
+      <div class="small" style="margin-top:10px">Learned continuation edges from successful searched traces</div>
+      <div id="successor-edges" class="route" style="margin-top:7px"></div>
+      <div class="divider"></div>
+      <div class="small">Held-out successor-consistent route</div>
+      <div id="successor-route" class="route" style="margin-top:7px"></div>
+      <p class="small">The router may look one step ahead into its own predicted state. It still never sees the reference algorithm's next state during held-out execution.</p>
     </div>
   </section>
 

@@ -98,9 +98,54 @@ function gate5(report){
   return {pass:passing.length>=1,evidence:{passing}};
 }
 
+function gate6(report){
+  const passing=[];
+  for(const [id,t] of Object.entries(report.tasks||{})){
+    const a=t.autopsy;
+    const h4=a?.horizons?.[4] ?? a?.horizons?.['4'];
+    if(!a || (a.eligibleTransitions??0)<8 || !h4) continue;
+    const teacher=a.teacherOneStepEndogenous;
+    if(!Number.isFinite(teacher) || teacher>0.10) continue;
+    const base=Math.max(teacher,1e-12);
+    const gap=Math.max(h4.fixedEndogenous??0,h4.freeEndogenous??0);
+    if(gap>=2*base) passing.push({id,teacherOneStepEndogenous:teacher,horizon4:h4,dominantFailure:a.dominantFailure});
+  }
+  return {pass:passing.length>=1,evidence:{passing}};
+}
+
+function gate7(report){
+  const passing=[];
+  for(const [id,t] of Object.entries(report.tasks||{})){
+    const e=t.successorExecution;
+    if(!e) continue;
+    const gain=(e.score??-Infinity)-(e.sourceOnlyScore??0);
+    const baselineGuard=(e.sourceOnlyScore??0)>(e.globalScore??0) ? (e.score??-Infinity)>=(e.globalScore??0)-0.02 : true;
+    const u0=e.sourceOnlyUnknownRate;
+    const u1=e.unknownRate;
+    const unknownImprove=Number.isFinite(u0)&&u0>0&&Number.isFinite(u1) ? (u0-u1)/u0 : 0;
+    const h0=e.sourceOnlyHorizon8Endogenous;
+    const h1=e.horizon8Endogenous;
+    const horizonImprove=Number.isFinite(h0)&&h0>0&&Number.isFinite(h1) ? (h0-h1)/h0 : 0;
+    const continuationImprove=Math.max(unknownImprove,horizonImprove);
+    if(gain>=0.10 && baselineGuard && continuationImprove>=0.20){
+      passing.push({id,gain,baselineGuard,unknownImprove,horizonImprove,continuationImprove});
+    }
+  }
+  return {pass:passing.length>=1,evidence:{passing}};
+}
+
 export function evaluateGates(report){
   const g0=gate0(report), g1=gate1(report);
-  return {gate0:g0,gate1:g1,gate2:gate2(report,g1),gate3:gate3(report,g1),gate4:gate4(report),gate5:gate5(report)};
+  return {
+    gate0:g0,
+    gate1:g1,
+    gate2:gate2(report,g1),
+    gate3:gate3(report,g1),
+    gate4:gate4(report),
+    gate5:gate5(report),
+    gate6:gate6(report),
+    gate7:gate7(report)
+  };
 }
 
 export function evaluateTaskBundle(bundle){ return bundle; }

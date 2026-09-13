@@ -13,6 +13,9 @@ for(const task of Object.values(report.tasks)){
   task.modes=task.modes.map(({id,threshold,trainSolvers,count})=>({id,threshold,trainSolvers,count}));
   task.interpretation.modes=(task.interpretation.modes||[]).map(({modeId,name,bestR2,probeCount,effectiveRank})=>({modeId,name,bestR2,probeCount,effectiveRank}));
   if(task.interpretation.candidates) delete task.interpretation.candidates;
+  if(task.execution?.sampleRoute) task.execution.sampleRoute=task.execution.sampleRoute.slice(0,12);
+  if(task.successorExecution?.sampleRoute) task.successorExecution.sampleRoute=task.successorExecution.sampleRoute.slice(0,12);
+  if(task.successorGraph) task.successorGraph={alpha:task.successorGraph.alpha,edges:(task.successorGraph.edges||[]).slice(0,12)};
 }
 // Keep the committed receipt compact while preserving a visual Mandelbrot thumbnail.
 // Scalar metrics above are computed on the full receipt evaluation grid before this reduction.
@@ -27,8 +30,11 @@ if(m?.gridSide && m.truthEscape && m.compiledEscape){
   m.truthEscape=pick.map(i=>m.truthEscape[i]);
   m.compiledEscape=pick.map(i=>m.compiledEscape[i]);
   if(m.globalEscape) m.globalEscape=pick.map(i=>m.globalEscape[i]);
+  const se=report.tasks.mandelbrot.successorExecution;
+  if(se?.escape) se.escape=pick.map(i=>se.escape[i]);
   m.gridSide=dst;
   m.thumbnailOnly=true;
+  if(se) se.thumbnailOnly=true;
 }
 if(report.controls?.mandelbrotImitation?.escape){
   const c=report.controls.mandelbrotImitation;
@@ -47,5 +53,5 @@ if(report.gates?.gate5?.evidence?.passing){
   report.gates.gate5.evidence.passing=report.gates.gate5.evidence.passing.map(({id,modeId,name,bestR2,probeCount})=>({id,modeId,name,bestR2,probeCount}));
 }
 fs.mkdirSync(path.join(root,'results'),{recursive:true});
-fs.writeFileSync(path.join(root,'results','default.json'),JSON.stringify(report,null,2)+'\n');
+fs.writeFileSync(path.join(root,'results','default.json'),JSON.stringify(report)+'\n');
 console.log(JSON.stringify(Object.fromEntries(Object.entries(report.gates).map(([k,v])=>[k,v.pass]))));

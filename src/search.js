@@ -17,7 +17,7 @@ function evaluate(program, taskId, instances){
 function tracesFrom(program, taskId, instances, solver){
   return instances.map(inst=>{
     const r=runProgram(program,taskId,inst);
-    return {solver,taskId,score:r.score,states:r.trace.map(s=>s.slice())};
+    return {solver,taskId,score:r.score,instance:JSON.parse(JSON.stringify(inst)),states:r.trace.map(s=>s.slice())};
   });
 }
 
