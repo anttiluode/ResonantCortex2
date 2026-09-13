@@ -34,25 +34,43 @@ The search/compression system is optimized only for task success and compact reu
 
 The frozen executable machine remains ground truth. A symbolic description counts as successful only to the extent that it reproduces or predicts the frozen machine's behavior.
 
+## No Intermediate Oracle
+
+The benchmark may compute the correct final answer or final task score in order to rank candidate solutions. It must **not** provide the learner with the known intermediate states of the human/reference algorithm.
+
+Search therefore receives:
+
+```text
+initial state + generic transform vocabulary + final score
+```
+
+not:
+
+```text
+initial state + teacher's next state + teacher's next state + ...
+```
+
+Successful trajectories are the trajectories actually taken by successful searched candidates. The compressor sees those discovered trajectories after the fact.
+
 ## V0 Scope
 
 The first release is a browser-only GitHub Pages laboratory with deterministic seeded experiments. No backend, model API, database, build system, or external dependency is required.
 
 V0 contains four task families chosen to require meaningfully different computation:
 
-### Task A — Mandelbrot Local Law
+### Task A — Mandelbrot Recurrence
 
-Goal: discover a recurrent machine that approximates the local update needed to reproduce Mandelbrot escape-time structure on held-out complex coordinates.
+Goal: discover a recurrent machine whose repeated local updates reproduce Mandelbrot escape-time structure on held-out complex coordinates.
 
-The learner may observe successful input/state/output trajectories generated during search, but the primitive vocabulary must not include a built-in `z^2 + c`, complex square, or Mandelbrot-specific operator.
+The primitive vocabulary must not include a built-in `z^2 + c`, complex square, or Mandelbrot-specific operator. The benchmark may calculate reference escape times only for scoring candidates and evaluation.
 
-Success is measured on unseen `c` values and by image-level escape-map similarity, not merely one-step training loss.
+Success is measured on unseen `c` values and by escape-map structure, not by teacher-forced one-step regression.
 
 ### Task B — Euclidean GCD
 
 Goal: solve held-out integer pairs with conditional recurrence.
 
-The primitive vocabulary must not include `gcd` or a complete Euclidean step as one atomic operator. Search may combine generic arithmetic/state transforms and gates.
+The primitive vocabulary must not include `gcd` or a complete Euclidean step as one atomic operator. Search receives the initial pair and final-answer score only.
 
 Success requires exact GCD on held-out pairs and termination within a bounded step budget.
 
@@ -62,77 +80,84 @@ Goal: sort unseen 4-element vectors.
 
 The primitive vocabulary must not include a complete sorting network or named compare-swap instruction. Generic local transforms and state-conditioned routing are allowed.
 
-Success requires exact sorted order on held-out vectors and generalization beyond the search tape.
+Success requires exact sorted order on held-out vectors and generalization beyond the search instances.
 
-### Task D — Parity / XOR Recurrence
+### Task D — Parity Recurrence
 
 Goal: compute sequence parity on unseen binary sequences using recurrent state.
 
 The primitive vocabulary must not expose `xor` as a named or complete primitive. The learner must discover an equivalent reusable transition if it needs one.
 
-Success requires exact held-out parity across lengths not all seen in search.
+Success requires exact held-out parity across sequence lengths not all seen in search.
 
 ## Representation
 
 Each task exposes a fixed-width numerical state vector plus a task-defined termination/readout contract. The state representation may include explicit input slots, work registers, a step counter, and an output slot, but may not contain hidden labels naming the correct primitive operation.
 
-The first implementation should keep dimensions small enough that every learned operator can be rendered and directly probed in the browser.
+The first implementation keeps state dimension at or below 16 scalars per task and the compressed bank at or below 12 modes so every learned operator can be rendered and directly probed in the browser.
 
-## Candidate Local Operator
+## Generic Search Transform
 
-A mode `i` consists of a local affine transition plus a low-complexity nonlinearity/gate:
+The search vocabulary is numerical rather than symbolic. A candidate step is a small parameterized transform with no task-specific operation name:
 
 ```text
-candidate prediction: s' = A_i s + b_i
-applicability residual: E_i(s, observed_transition)
-activation: g_i = sigmoid(beta * (theta_i - E_i))
+preactivation h = A s + b
+soft gate      g = sigmoid(k * (u·s + c))
+next state     s' = s + g * h
 ```
 
-For execution, the system uses state-derived applicability rather than access to the true next state. V0 may estimate a mode's region using a learned prototype/subspace of the source states associated with that operator.
+Search mutates/selects the coefficients `A`, `b`, `u`, `c`, and `k`, and may compose multiple steps recurrently. This vocabulary can express local affine motion, conditional motion, copying/permutation-like behavior, thresholds, and piecewise approximations without exposing named algorithms.
 
-The preferred implementation is intentionally small:
+Mandelbrot is intentionally difficult for this vocabulary: a finite bank of gated local affine maps must approximate a nonlinear recurrence through routing/piecewise structure rather than receiving multiplication as a privileged primitive.
 
-- source-state subspace/prototype for applicability,
-- affine local transition for action,
-- soft or hard gate,
-- recurrence over a bounded number of steps.
+## Candidate Compressed Mode
+
+A compressed mode `i` contains:
+
+```text
+source model: prototype/subspace describing where the mode was used
+transition:   s' = A_i s + b_i
+activation:   g_i(s) = sigmoid(beta_i * (theta_i - R_i(s)))
+```
+
+`R_i(s)` is a source-state residual or distance learned from states associated with the mode. It is computable from the current state alone. The true next state is never available to the execution-time router.
 
 This keeps the discovered instruction visually inspectable and permits direct ablations.
 
 ## Search
 
-Search produces candidate trajectories. V0 must support at least two materially different search generators so that discovered structure can be tested for solver dependence.
+Search produces candidate programs/trajectories from final task score. V0 supports two materially different generators over the same numerical transform representation:
 
-Recommended initial generators:
+1. evolutionary mutation/selection,
+2. simulated annealing / stochastic local search.
 
-1. evolutionary / mutation search,
-2. stochastic local search or simulated annealing.
+Default browser budget is **4,000 candidate evaluations per generator per task**. UI controls may lower or raise this, but default receipts use the fixed budget.
 
-The search representation is shared across generators. A successful trace is a sequence of state transitions with a task score. The compressor receives successful traces, not solver identity by default.
+A successful trace is the actual state sequence produced by a high-scoring candidate. The compressor receives successful traces, not solver identity by default.
 
-Solver identity may be retained only for later analysis of whether modes correlate with the generating solver or with task-relevant transition structure.
+Solver identity is retained only as analysis metadata so Gate 4 can test whether modes reflect reusable computation or merely identify the generating solver.
 
 ## Compression
 
-Compression clusters recurring successful transitions and fits reusable local operators.
+Compression clusters recurring successful transitions and fits reusable local affine operators plus source-state applicability models.
 
-A compressed mode is accepted only when replacing its member transitions with the fitted mode preserves low transition error on held-out trace fragments.
+A candidate cluster becomes a mode only if its fitted transition improves validation error over assigning those transitions to the global task operator. V0 uses deterministic greedy split/merge clustering and caps the bank at 12 modes.
 
-Compression should prefer fewer modes when predictive quality is comparable. V0 may use a simple greedy split/merge strategy rather than an elaborate optimizer.
-
-The important measurement is not compression ratio alone. The test is whether the frozen mode bank can **execute** unseen instances without replaying the original search.
+The important measurement is not compression ratio alone. The frozen mode bank must execute unseen instances without replaying the original search.
 
 ## Routing and Execution
 
 At each step:
 
-1. compute applicability score for every learned mode from the current state,
-2. select the best sufficiently applicable mode or a small weighted mixture,
-3. apply its transition operator,
+1. compute `R_i(s)` and gate value for every learned mode,
+2. choose the highest gate above threshold,
+3. apply that mode's transition operator,
 4. update the state,
-5. stop on task termination or step budget.
+5. stop on task termination or the task step budget.
 
-If no mode is sufficiently applicable, the executor emits `UNKNOWN` rather than silently choosing an arbitrary mode. This residual/unknown signal is central to the search-compiler idea: unknown states are candidates for invoking expensive search in later versions.
+V0 uses **hard top-1 routing** so route sequences and ablations remain interpretable. Soft mixtures are deferred.
+
+If no mode exceeds the threshold, the executor emits `UNKNOWN` rather than silently choosing an arbitrary mode. This is central to the search-compiler hypothesis: unknown states are candidates for invoking expensive search in later versions.
 
 V0 records the complete route as a mode-ID sequence.
 
@@ -156,14 +181,31 @@ A mode may remain `UNNAMED` while still being counted as a reusable discovered c
 
 ## Baselines
 
-Every task uses the same seeded train/search/evaluation tapes where applicable. V0 compares:
+Every task uses the same seeded search/evaluation instances where applicable. V0 compares:
 
-1. **Search-only** — rerun the original search on every new instance.
-2. **Global transform** — one fitted global transition/operator for the task.
-3. **Compressed routed modes** — the proposed system.
-4. **Tiny matched neural baseline** — a small MLP/recurrent baseline with roughly comparable parameter count, trained on the same successful transition data.
+1. **Search-only** — rerun the original search on each held-out instance.
+2. **Global transform** — one fitted affine transition/operator for the task.
+3. **Compressed routed modes** — the proposed system, maximum 12 modes.
+4. **Tiny neural baseline** — one hidden-layer MLP or small recurrent network trained on the successful searched transitions, with total trainable scalar parameters between **0.5× and 2×** the compressed mode bank's parameter count.
 
-Optional diagnostic: nearest-neighbor transition replay. This is useful if cheap enough, but it is not required for the first gate.
+Optional diagnostic: nearest-neighbor transition replay. It is useful if cheap enough but is not required for V0's first implementation.
+
+## Evaluation Sets
+
+Each task uses disjoint deterministic seeds for:
+
+- search instances,
+- compression-validation trace fragments,
+- final held-out execution instances.
+
+Default final held-out sizes:
+
+- Mandelbrot: 96×96 coordinate grid, 32 recurrent steps,
+- GCD: 128 unseen integer pairs,
+- sort-4: 256 unseen vectors,
+- parity: 256 unseen sequences spanning lengths 5–20.
+
+These defaults are recorded in `results/default.json`.
 
 ## Gates
 
@@ -171,64 +213,90 @@ Scientific failures remain visible and do not fail CI unless an engineering inva
 
 ### Gate 0 — Local Compression Is Real
 
-For at least three of the four task families, compressed local operators predict held-out successful trace transitions substantially better than the one-global-transform baseline at comparable or lower complexity.
+For at least **3 of 4** task families, compressed routed modes must reduce held-out transition NMSE by at least **25%** relative to the single global affine operator:
+
+```text
+NMSE_modes <= 0.75 * NMSE_global
+```
+
+while respecting the 12-mode cap.
 
 ### Gate 1 — Compiled Execution Generalizes
 
-For at least two task families, a frozen routed mode bank solves held-out instances materially better than the global-transform baseline without invoking the original search.
+For at least **2 of 4** task families, the frozen routed bank must improve final held-out task score over the global-transform baseline by at least **20 percentage points** and must reach at least **80% exact success** on discrete tasks.
 
-Mandelbrot must additionally reproduce recognizable held-out escape-time structure rather than only low one-step error.
+For Mandelbrot, instead of exact success, both conditions are required on the held-out escape map:
+
+```text
+Pearson correlation >= 0.90
+normalized MAE <= 0.12
+```
+
+where escape times are normalized by the 32-step maximum.
 
 ### Gate 2 — Search Is Actually Compressed
 
-On the task families passing Gate 1, compiled execution must require substantially fewer candidate evaluations than search-only while retaining useful solution quality.
+For every task counted as passing Gate 1, frozen compiled execution must use at least **20× fewer candidate evaluations** than search-only on the held-out set while retaining at least **90% of search-only task score**.
 
-The report records the actual ratio; no result is promoted by hiding failed tasks.
+A deterministic mode application counts as one compiled step, not as a candidate evaluation. The receipt reports both counts separately.
 
 ### Gate 3 — Routing Matters
 
-At least one passing task must degrade materially when routing is disabled and all states are forced through one averaged/global operator or a randomly chosen mode.
+At least one Gate-1-passing task must lose either **20 percentage points of exact success** or **25% of its continuous score** when routing is disabled and execution is forced through the single global operator or a randomly selected learned mode.
 
 ### Gate 4 — Reusable Structure Is Not Merely Solver Identity
 
-Pool successful traces from the two search generators. At least one learned mode or short route motif must recur across both generators on the same task family, or transfer to a held-out solver-generated tape. If modes only classify which solver produced them, record that as a negative result.
+Pool successful traces from both search generators. At least one mode or route motif of length 2–4 must satisfy both:
+
+- appear in successful traces from **both** generators,
+- retain at least **80%** of its within-generator transition fidelity when evaluated on trace fragments produced by the other generator.
+
+If modes instead cleanly classify solver identity but fail cross-generator fidelity, Gate 4 fails and that negative result is reported.
 
 ### Gate 5 — Explanation Fidelity
 
-At least one discovered mode must admit a compact post-hoc description whose explicit surrogate predicts the frozen mode's outputs on probes with high fidelity. This gate is intentionally secondary: failure does not invalidate a useful but unnamed computation.
+At least one discovered mode must admit a compact post-hoc surrogate from the interpreter's fixed description library whose outputs achieve:
+
+```text
+R^2 >= 0.98
+```
+
+against the frozen mode on an independent probe set of at least 1,000 source states.
+
+This gate is intentionally secondary: failure does not invalidate a useful but unnamed computation.
 
 ## Mandelbrot-Specific Integrity Check
 
-The Mandelbrot task must distinguish two experiments:
+The Mandelbrot task contains two visibly separate experiments:
 
-- **Imitation control:** fit the known one-step law directly. This recreates the original ResonantCortex-style result and confirms the renderer/test harness.
-- **Discovery experiment:** hide that law from the mode vocabulary and let search/compression discover an executable recurrent approximation from successful traces.
+- **Imitation control:** fit the known one-step `z^2 + c` law directly. This recreates the original ResonantCortex-style result and confirms the renderer/evaluator.
+- **Discovery experiment:** hide that law from the transform vocabulary and let final-score search plus compression discover an executable recurrent approximation.
 
-The control cannot be reported as evidence for algorithm discovery.
+The imitation control cannot be reported as evidence for algorithm discovery.
 
 ## UI
 
 `index.html` is a static interactive lab rather than a marketing page.
 
-The first release should show:
+The first release shows:
 
 - task selector,
 - seed and search-budget controls,
-- run-search / compress / execute buttons,
+- run search / compress / execute controls,
 - score and evaluation table,
 - discovered mode cards showing applicability and operator summaries,
-- route graph / route sequence for selected held-out instance,
+- route sequence/graph for a selected held-out instance,
 - Mandelbrot truth vs compiled escape-map canvases,
 - ablation controls for routing, individual modes, and global-transform baseline,
 - explicit PASS/FAIL badges for Gates 0–5.
 
-The UI must distinguish **engineering status** from **scientific result**.
+The UI distinguishes **engineering status** from **scientific result**.
 
 ## Determinism and Reproducibility
 
-All stochastic components use explicit seeded PRNG state. A single experiment configuration serializes to JSON. Evaluation uses frozen held-out tapes generated from independent seeds.
+All stochastic components use explicit seeded PRNG state. A complete experiment configuration serializes to JSON. Evaluation uses frozen held-out instances generated from independent seeds.
 
-The browser report must expose seed, budgets, mode count, success metrics, and gate outcomes so screenshots are interpretable.
+The browser report exposes seed, budgets, mode count, success metrics, and gate outcomes so screenshots are interpretable.
 
 ## Repository Layout
 
@@ -237,9 +305,9 @@ Planned structure:
 ```text
 index.html                 static lab shell
 src/prng.js                deterministic random utilities
-src/tasks.js               task definitions and state/readout contracts
-src/operators.js           generic local operator representation
-src/search.js              search generators and trace format
+src/tasks.js               task definitions and final scoring contracts
+src/operators.js           generic searched/compressed transform representation
+src/search.js              two search generators and discovered trace format
 src/compress.js            transition clustering/operator fitting
 src/executor.js            routing, recurrence, UNKNOWN handling
 src/interpreter.js         post-hoc probes and candidate descriptions
@@ -277,7 +345,7 @@ V0 does not attempt:
 
 The strongest positive V0 result would be:
 
-> Different search procedures discover successful trajectories; compression extracts a small shared bank of local operators; state-dependent geometric routing composes them into a recurrent machine that solves held-out instances more cheaply than rerunning search; and at least part of that machine can be explained post hoc without those symbolic names having been supplied during discovery.
+> Different search procedures discover successful trajectories from final task score alone; compression extracts a small shared bank of local operators; state-dependent geometric routing composes them into a recurrent machine that solves held-out instances more cheaply than rerunning search; and at least part of that machine can be explained post hoc without those symbolic names having been supplied during discovery.
 
 A weaker but still useful result is that routed local operators outperform a global transform on some task families but fail cross-solver reuse or symbolic explanation.
 
