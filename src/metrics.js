@@ -98,6 +98,7 @@ function gate5(report){
   return {pass:passing.length>=1,evidence:{passing}};
 }
 
+
 function gate6(report){
   const passing=[];
   for(const [id,t] of Object.entries(report.tasks||{})){
@@ -134,8 +135,66 @@ function gate7(report){
   return {pass:passing.length>=1,evidence:{passing}};
 }
 
+
+function gate8(report){
+  const e=report.causalControl?.substrateIntegrity;
+  if(!e) return {pass:false,evidence:{reason:'no causal-control substrate evidence'}};
+  const pass=e.finiteRate===1 && e.convergenceRate>=0.999 && e.deterministic===true && e.controlPerturbs===true && e.immutable===true && e.directOverwriteImpossible===true;
+  return {pass,evidence:{...e}};
+}
+
+function gate9(report){
+  const passing=[];
+  for(const [id,t] of Object.entries(report.causalControl?.tasks||{})){
+    const s=t.search||{};
+    const ok=(s.score??-Infinity)>=0.85 && (s.exact??-Infinity)>=0.80 && (s.score-(s.noControlScore??0))>=0.20 && s.evolutionHasSuccess===true && s.annealHasSuccess===true;
+    if(ok) passing.push({id,score:s.score,exact:s.exact,noControlScore:s.noControlScore});
+  }
+  return {pass:passing.length>=3,evidence:{passing,count:passing.length}};
+}
+
+function gate10(report){
+  const passing=[];
+  for(const [id,t] of Object.entries(report.causalControl?.tasks||{})){
+    const s=t.search||{},c=t.compiled||{};
+    const retained=(c.score??-Infinity)/Math.max(EPS,s.score??0);
+    const beatsGlobal=((c.score??-Infinity)-(c.globalScore??0)>=0.10)||((c.exact??-Infinity)-(c.globalExact??0)>=0.15);
+    const ok=retained>=0.90 && beatsGlobal && (c.searchEvaluationsAtInference??Infinity)===0 && (c.unknownRate??Infinity)<=0.10;
+    if(ok) passing.push({id,retained,beatsGlobal,unknownRate:c.unknownRate,usedMotifs:c.usedMotifs??0,motifCount:c.motifCount??0});
+  }
+  const diverse=passing.some(x=>x.usedMotifs>=2);
+  return {pass:passing.length>=2&&diverse,evidence:{passing,count:passing.length,diverse}};
+}
+
+function gate11(report,g10){
+  const eligible=new Set((g10.evidence?.passing||[]).map(x=>x.id));
+  const passing=[];
+  for(const [id,t] of Object.entries(report.causalControl?.tasks||{})){
+    if(!eligible.has(id)) continue;
+    const h=t.horizon||{};
+    const h1=h.h1,h8=h.h8,ab=h.earlyAbstentionRate;
+    const ok=Number.isFinite(h1)&&Number.isFinite(h8)&&h1<=0.05&&h8<=0.10&&h8<=2*h1+0.02&&(ab??Infinity)<=0.10;
+    if(ok) passing.push({id,h1,h8,earlyAbstentionRate:ab});
+  }
+  return {pass:passing.length>=2,evidence:{passing,count:passing.length}};
+}
+
+
+function gate12(report){
+  const passing=(report.globalConsistency?.episodes||[]).filter(e=>e.localLegal===true&&e.allConverged===true&&e.boundsOk===true&&(e.closureError??0)>0.10);
+  return {pass:passing.length>=1,evidence:{passing:passing.map(e=>({name:e.name,closureError:e.closureError,localLegal:e.localLegal})),count:passing.length}};
+}
+
+function gate13(report){
+  const m=report.globalConsistency?.monitor;
+  if(!m) return {pass:false,evidence:{reason:'no global-consistency monitor evidence'}};
+  const pass=(m.badRecall??0)>=0.90&&(m.falsePositiveRate??Infinity)<=0.10&&m.usesTaskLabels===false;
+  return {pass,evidence:{...m}};
+}
+
 export function evaluateGates(report){
   const g0=gate0(report), g1=gate1(report);
+  const g10=gate10(report);
   return {
     gate0:g0,
     gate1:g1,
@@ -144,7 +203,13 @@ export function evaluateGates(report){
     gate4:gate4(report),
     gate5:gate5(report),
     gate6:gate6(report),
-    gate7:gate7(report)
+    gate7:gate7(report),
+    gate8:gate8(report),
+    gate9:gate9(report),
+    gate10:g10,
+    gate11:gate11(report,g10),
+    gate12:gate12(report),
+    gate13:gate13(report)
   };
 }
 
